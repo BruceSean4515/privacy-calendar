@@ -1,2 +1,34 @@
-# privacy-calendar
-A privacy-first calendar for personal sensitive data tracking
+一款专注于隐私保护的个人日历应用，支持记录敏感数据、消费统计、多模式管理。
+
+## ✨ 特性
+
+- 🔒 **隐私保护模式** - 不联网，本地运行
+- 📊 **消费统计** - 月度/年度统计，自定义范围查询
+- 🏷️ **多标签系统** - 自定义标签分类
+- 📱 **移动端优化** - 纯前端，支持 PWA
+- 🔄 **数据迁移** - 支持导入正气APP数据
+- 💾 **本地存储** - 数据完全存储在浏览器本地
+- 🌐 **多语言支持** - 中文/英文
+
+### 数据导入
+支持导入正气APP的备份数据：
+1. 正气APP → 我 → 设置 → 数据备份 → 备份到SD卡
+2. 在本应用选择恢复数据 → 粘贴备份文件内容
+
+## 🔧 技术特性
+- 纯 HTML/CSS/JavaScript
+- 响应式设计，适配移动端
+- LocalStorage 数据存储
+- 支持 Web Share API
+- AES-256 加密备份
+
+## 🤝 参与贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📄 许可证
+
+MIT License - 详见 [LICENSE](LICENSE) 文件
+
+## 🙏 致谢
+- 灵感来源于正气APP等隐私记录工具
