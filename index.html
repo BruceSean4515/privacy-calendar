@@ -1,0 +1,2313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <title>隐私日历 4.9</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --card-color: #1c1c1e;
+            --item-color: #2c2c2e;
+            --text-color: #ffffff;
+            --secondary-text: #8e8e93;
+            --accent-color: #0a84ff;
+            --danger-color: #ff453a;
+            --money-color: #ffd60a; 
+            --tag-bg: #3a3a3c;
+            --selected-tag-bg: rgba(10, 132, 255, 0.3);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        html, body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%; 
+            font-family: -apple-system, BlinkMacSystemFont, "MiSans", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden; 
+            user-select: none;
+            display: flex; flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            height: 50px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px;
+            background: var(--bg-color);
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        
+        /* Title / Date Picker */
+        #calendar-title-btn {
+            font-size: 20px; font-weight: 600; color: var(--text-color);
+            background: none; border: none; cursor: pointer;
+            display: flex; align-items: flex-end; gap: 4px;
+            padding: 0;
+        }
+        #calendar-title-btn span.year { font-size: 20px; }
+        #calendar-title-btn span.month { font-size: 16px; color: var(--secondary-text); margin-bottom: 2px;}
+
+        /* Mode Switcher (极简版) */
+        #mode-switcher-btn {
+            background: none; border: none; color: var(--text-color);
+            font-size: 15px; font-weight: 600; padding: 5px;
+            display: flex; align-items: center; gap: 4px;
+            cursor: pointer; max-width: 140px;
+        }
+        #mode-switcher-btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #mode-switcher-btn svg { opacity: 0.6; width: 12px; height: 12px; }
+        #mode-switcher-btn:active { opacity: 0.7; }
+
+        .header-actions { display: flex; align-items: center; gap: 10px; }
+        .icon-btn { color: var(--text-color); background: none; border: none; padding: 5px; display: flex; }
+        
+        #month-total {
+            font-size: 12px; color: var(--money-color); font-weight: 600;
+            background: rgba(255, 214, 10, 0.15); padding: 4px 8px; border-radius: 6px;
+            transition: opacity 0.2s; font-variant-numeric: tabular-nums;
+        }
+        #month-total.hidden { opacity: 0; pointer-events: none; }
+
+        /* Calendar */
+        .calendar-section {
+            padding-bottom: 5px;
+            border-bottom: 1px solid #1a1a1a;
+            flex-shrink: 0; 
+            background: var(--bg-color);
+            z-index: 5;
+            position: relative;
+        }
+
+        .week-days { 
+            display: grid; grid-template-columns: repeat(7, 1fr); 
+            text-align: center; color: var(--secondary-text); 
+            font-size: 11px; font-weight: 600; margin-bottom: 8px; padding: 0 12px;
+        }
+
+        .calendar-viewport {
+            position: relative; width: 100%; height: 300px; overflow: hidden;
+            transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .days-grid { 
+            display: grid; grid-template-columns: repeat(7, 1fr); 
+            row-gap: 2px; column-gap: 2px; 
+            width: 100%; padding: 0 12px;
+            position: absolute; top: 0; left: 0;
+            will-change: left;
+        }
+
+        .day-cell {
+            aspect-ratio: 0.8; 
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            position: relative; padding-top: 4px;
+            cursor: pointer;
+        }
+
+        .day-number {
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            font-size: 16px; font-weight: 500;
+            z-index: 2;
+            transition: background 0.2s, color 0.2s, border 0.2s;
+        }
+
+        .day-cell.today .day-number {
+            background-color: var(--accent-color);
+            color: white; font-weight: 700;
+            box-shadow: 0 2px 6px rgba(10, 132, 255, 0.4);
+        }
+
+        .day-cell.selected .day-number { background-color: #333; color: white; }
+        .day-cell.selected.today .day-number { background-color: var(--accent-color); border: 2px solid #fff; }
+
+        .day-dot {
+            width: 4px; height: 4px; background-color: var(--secondary-text); 
+            border-radius: 50%; margin-top: 4px;
+        }
+        .day-cell.today .day-dot { background-color: rgba(255,255,255,0.8); }
+
+        .day-content-preview {
+            font-size: 9px;
+            margin-top: 2px; font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 90%;
+        }
+        /* All previews use money color */
+        .day-content-preview.money, 
+        .day-content-preview.tag, 
+        .day-content-preview.note { 
+            color: var(--money-color); 
+        }
+        .day-content-preview.money { font-variant-numeric: tabular-nums; }
+        .day-content-preview.dot { font-size: 14px; line-height: 4px; color: var(--secondary-text); }
+
+        /* Notes List */
+        .notes-section {
+            flex: 1; display: flex; flex-direction: column;
+            background-color: #000; position: relative; min-height: 0; 
+        }
+
+        .notes-list {
+            flex: 1; overflow-y: auto; padding: 16px; padding-bottom: 20px; 
+            display: flex; flex-direction: column; gap: 10px;
+            -webkit-overflow-scrolling: touch; 
+        }
+
+        .note-wrapper {
+            flex-shrink: 0; position: relative; width: 100%; border-radius: 12px;
+            overflow: hidden; background-color: var(--danger-color);
+        }
+
+        .delete-action-bg {
+            position: absolute; top: 0; right: 0; bottom: 0; width: 70px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 600; font-size: 14px; z-index: 1;
+        }
+
+        .note-slider {
+            position: relative; background: var(--item-color); padding: 12px 14px; 
+            border-radius: 12px; color: #eee; font-size: 15px; line-height: 1.4;
+            z-index: 2; transform: translateX(0);
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            min-height: 48px; display: flex; align-items: center; gap: 10px;
+        }
+        /* 新增：编辑状态高亮 */
+        .note-slider.being-edited {
+            background: #333;
+            outline: 1px solid var(--accent-color);
+        }
+        
+        .note-tag-badge {
+            background: var(--tag-bg); color: #ddd; font-size: 12px; 
+            padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+            flex-shrink: 0; font-weight: 500;
+        }
+        
+        .note-content { flex: 1; word-break: break-all; }
+        
+        .note-cost-badge { 
+            color: var(--money-color); font-weight: 600; font-size: 14px; 
+            white-space: nowrap; flex-shrink: 0;
+        }
+
+        /* Input Area */
+        .input-container {
+            width: 100%; background: var(--card-color);
+            border-top: 1px solid #222; z-index: 20; flex-shrink: 0;
+            display: flex; flex-direction: column;
+            padding-bottom: env(safe-area-inset-bottom, 15px);
+        }
+        .input-container.hidden { display: none; }
+
+        .tags-bar {
+            display: none; 
+            overflow-x: auto; padding: 12px 16px 0 16px; gap: 8px;
+            -webkit-overflow-scrolling: touch; scrollbar-width: none;
+            min-height: 44px; 
+        }
+        .tags-bar.show { display: flex; }
+        
+        .tag-chip {
+            background: #333; color: #ccc; padding: 6px 12px; border-radius: 16px;
+            font-size: 13px; white-space: nowrap; border: 1px solid #444;
+            flex-shrink: 0; cursor: pointer; transition: all 0.1s; user-select: none;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .tag-chip.active { background: var(--accent-color); color: white; border-color: var(--accent-color); }
+        .tag-chip.add-btn { color: var(--accent-color); border-color: var(--accent-color); font-weight: bold; }
+
+        .input-row { padding: 10px 16px; display: flex; gap: 8px; align-items: center; }
+        
+        .tag-toggle-btn { color: #888; background: none; border: none; padding: 5px; cursor: pointer; flex-shrink: 0; }
+        .tag-toggle-btn.active { color: var(--accent-color); }
+
+        .main-input { flex: 1; background: #000; border: 1px solid #333; color: white; padding: 10px 14px; border-radius: 18px; font-size: 15px; outline: none; min-width: 0; }
+        .main-input:focus { border-color: var(--accent-color); }
+        
+        .cost-input { width: 80px; background: #000; border: 1px solid #333; color: var(--money-color); padding: 10px 5px; border-radius: 18px; font-size: 15px; outline: none; text-align: center; flex-shrink: 0; }
+        .cost-input:focus { border-color: var(--money-color); }
+
+        .send-btn { background: var(--accent-color); border: none; width: 40px; height: 40px; border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
+
+        /* Floating Btn */
+        #back-to-today-btn, #stats-back-today-btn {
+            position: fixed; bottom: 90px; right: 20px; 
+            width: 44px; height: 44px; border-radius: 50%;
+            background-color: var(--accent-color); color: white;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 14px; font-weight: bold;
+            box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4);
+            z-index: 30; opacity: 0; transform: scale(0.8); pointer-events: none;
+            transition: opacity 0.3s, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        #stats-back-today-btn { position: absolute; bottom: 20px; z-index: 4200; width: 40px; height: 40px; font-size: 13px; }
+        .visible { opacity: 1 !important; transform: scale(1) !important; pointer-events: auto !important; }
+
+        /* Custom Prompt */
+        #custom-prompt-overlay, #mode-manager-overlay, #lang-manager-overlay, #backup-choice-overlay, #display-setting-overlay, #confirm-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 6000;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+            backdrop-filter: blur(5px);
+        }
+        #custom-prompt-overlay.active, #mode-manager-overlay.active, #lang-manager-overlay.active, #backup-choice-overlay.active, #display-setting-overlay.active, #confirm-overlay.active { opacity: 1; pointer-events: auto; }
+        
+        .custom-prompt-box {
+            background: #1c1c1e; width: 280px;
+            padding: 20px; border-radius: 16px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+            transform: scale(0.95); transition: transform 0.2s;
+        }
+        .active .custom-prompt-box { transform: scale(1); }
+        
+        .prompt-title { font-size: 17px; font-weight: 600; margin-bottom: 5px; }
+        .prompt-desc { font-size: 13px; color: #888; margin-bottom: 15px; }
+        
+        .input-wrapper { position: relative; width: 100%; margin: 10px 0 20px 0; }
+        
+        .prompt-input { 
+            width: 100%; background: transparent; border: none; border-bottom: 1px solid #3a3a3c; 
+            color: white; padding: 10px 30px 10px 10px; 
+            font-size: 16px; outline: none; text-align: center; 
+            display: none; 
+        }
+        .prompt-input.active-input { display: block; }
+        .prompt-input:focus { border-color: var(--accent-color); }
+        
+        .clear-btn {
+            position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+            color: #888; background: none; border: none; padding: 5px;
+            display: none; cursor: pointer;
+        }
+        .clear-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+        .prompt-actions { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin-top: 15px; }
+        .prompt-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 5px 10px; }
+        .prompt-cancel { color: #888; }
+        .prompt-confirm { color: var(--accent-color); font-weight: 600; }
+        
+        .paste-text-btn {
+            color: var(--accent-color); font-size: 14px; font-weight: 500;
+            cursor: pointer; display: none; margin-top: -10px; margin-bottom: 15px;
+            padding: 5px;
+        }
+        .paste-text-btn:active { opacity: 0.7; }
+        
+        .guide-link {
+            font-size: 12px; color: #666; margin-top: 20px; text-decoration: underline; cursor: pointer;
+        }
+
+        /* Mode & Lang & Backup Manager UI */
+        .mode-list, .lang-list, .choice-list { display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+        
+        .mode-wrapper, .lang-wrapper, .choice-wrapper {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            width: 100%;
+            flex-shrink: 0;
+            background-color: var(--danger-color);
+        }
+        
+        .mode-delete-bg {
+            position: absolute; top: 0; right: 0; bottom: 0; width: 70px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 600; font-size: 14px; z-index: 1;
+        }
+
+        .mode-slider, .lang-item, .choice-item {
+            position: relative;
+            background: #2c2c2e;
+            padding: 12px 15px;
+            border-radius: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 2;
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            min-height: 46px;
+            border: 1px solid transparent;
+        }
+        .mode-slider.active, .lang-item.active, .choice-item:active { background: #333; border-color: var(--accent-color); }
+
+        .mode-name, .lang-name, .choice-name { font-size: 15px; font-weight: 500; flex: 1; text-align: left; }
+        
+        .mode-name-input {
+            background: transparent; border: none; color: white;
+            font-size: 15px; font-weight: 500; width: 100%;
+            outline: none; padding-bottom: 2px; margin-right: 10px;
+            caret-color: var(--accent-color);
+        }
+
+        .mode-actions { display: flex; gap: 10px; align-items: center; }
+        .mode-icon-btn { color: #888; padding: 4px; display: flex; align-items: center; cursor: pointer; }
+        .mode-icon-btn:active { color: white; }
+        
+        .add-mode-btn { 
+            width: 100%; padding: 12px; background: #333; color: var(--accent-color);
+            border-radius: 12px; border: 1px dashed #444; margin-top: 5px; font-size: 14px;
+        }
+
+        /* Context Menu */
+        #tag-context-menu {
+            position: fixed; z-index: 3100; background: #2c2c2e; border-radius: 12px; padding: 5px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; flex-direction: column; min-width: 120px;
+        }
+        #tag-context-menu.active { display: flex; }
+        .context-item { padding: 12px; color: white; font-size: 14px; text-align: center; border-bottom: 1px solid #3a3a3c; }
+        .context-item:last-child { border-bottom: none; color: var(--danger-color); }
+        .context-item:active { background: #3a3a3c; }
+
+        /* Stats View */
+        #stats-view {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color); z-index: 2000;
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        #stats-view.active { transform: translateY(0); }
+        
+        .stats-header { height: 50px; padding: 0 20px; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .stats-title { font-size: 18px; font-weight: 700; }
+        .stats-content { flex: 1; overflow-y: auto; padding: 20px; -webkit-overflow-scrolling: touch; }
+        .stats-section-title { font-size: 14px; color: var(--secondary-text); margin: 25px 0 10px 0; font-weight: 600; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .stats-card { background: var(--card-color); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 5px; }
+        .stats-label { color: var(--secondary-text); font-size: 13px; }
+        .stats-val { color: var(--money-color); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        
+        .filter-tags-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .filter-tag { background: #2c2c2e; color: #888; padding: 6px 12px; border-radius: 12px; font-size: 13px; border: 1px solid transparent; cursor: pointer; }
+        .filter-tag.selected { background: var(--selected-tag-bg); color: var(--accent-color); border-color: var(--accent-color); }
+
+        .date-range-box { background: var(--card-color); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 15px; }
+        .date-inputs { display: flex; gap: 10px; align-items: center; }
+        .range-input-mock { flex: 1; background: #2c2c2e; color: white; padding: 12px; border-radius: 10px; font-size: 14px; text-align: center; cursor: pointer; }
+        .range-input-mock:active { background: #3a3a3c; }
+        .range-separator { color: #555; }
+        
+        .quick-range-btns { display: flex; gap: 10px; }
+        .quick-range-btn { flex: 1; background: var(--item-color); color: #ccc; padding: 10px; border-radius: 10px; border: none; font-size: 13px; cursor: pointer; }
+        .quick-range-btn:active { background: #3a3a3c; }
+
+        .result-summary { margin-top: 10px; text-align: center; }
+        .result-total { font-size: 20px; color: white; font-weight: bold; }
+        .result-sub { font-size: 13px; color: var(--secondary-text); margin-top: 4px; }
+
+        .tag-stats-list { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .tag-stat-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: var(--item-color); border-radius: 12px; }
+        .stat-tag-info { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+        .stat-tag-count { font-size: 12px; color: #888; background: #222; padding: 2px 6px; border-radius: 4px;}
+        .stat-tag-cost { color: var(--money-color); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+        /* Stats Calendar */
+        #stats-calendar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 4000; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        #stats-calendar-overlay.active { opacity: 1; pointer-events: auto; }
+        #stats-calendar-modal { position: fixed; bottom: 0; left: 0; width: 100%; height: 60vh; background: #181818; border-top-left-radius: 20px; border-top-right-radius: 20px; z-index: 4001; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); display: flex; flex-direction: column; }
+        #stats-calendar-modal.active { transform: translateY(0); }
+        .rc-header { height: 50px; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; border-bottom: 1px solid #2c2c2e; }
+        .rc-title { font-size: 18px; font-weight: 600; display: flex; align-items: flex-end; gap: 6px; cursor: pointer; }
+        .rc-title span.rc-title-m { font-size: 16px; color: var(--secondary-text); margin-bottom: 2px; }
+        .rc-viewport { position: relative; width: 100%; height: 300px; overflow: hidden; flex-shrink: 0; touch-action: none; }
+        .stats-days-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; column-gap: 4px; width: 100%; padding: 0 16px; position: absolute; top: 0; left: 0; will-change: left; }
+
+        /* Picker */
+        #picker-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 5000; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        #picker-modal { position: fixed; bottom: 0; left: 0; width: 100%; height: 45vh; background: #181818; border-top-left-radius: 20px; border-top-right-radius: 20px; z-index: 5001; transform: translateY(100%); transition: transform 0.3s; display: flex; flex-direction: column; }
+        #picker-overlay.active { opacity: 1; pointer-events: auto; }
+        #picker-modal.active { transform: translateY(0); }
+        .picker-toolbar { height: 50px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
+        .picker-btn { font-size: 16px; color: var(--accent-color); background: none; border: none; }
+        .picker-body { flex: 1; display: flex; overflow: hidden; position: relative; }
+        .picker-col { flex: 1; overflow-y: scroll; padding: 150px 0; scroll-snap-type: y mandatory; }
+        .picker-col::-webkit-scrollbar { display: none; }
+        .picker-item { height: 50px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--secondary-text); scroll-snap-align: center; }
+        .picker-item.active { color: white; font-size: 22px; font-weight: 500; }
+        .picker-item.is-current { color: var(--accent-color); font-weight: 600; position: relative; }
+        .picker-highlight { position: absolute; top: 50%; left: 0; width: 100%; height: 50px; transform: translateY(-50%); background: rgba(255,255,255,0.03); pointer-events: none; }
+
+        /* Menu & Toast */
+        #settings-menu { position: absolute; top: 50px; right: 10px; background: #222; padding: 5px; border-radius: 12px; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.8); z-index: 300; width: 160px; }
+        .menu-item { padding: 12px; color: white; font-size: 14px; text-align: center; }
+        .menu-item:active { background: #333; border-radius: 8px; }
+
+        #toast { position: fixed; bottom: 50%; left: 50%; transform: translate(-50%, 50%); background: rgba(50,50,50,0.9); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 7000; backdrop-filter: blur(5px);}
+    </style>
+</head>
+<body>
+
+    <header>
+        <button id="calendar-title-btn" onclick="openDatePicker('main')">
+            <span class="year"></span>
+            <span class="month"></span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:5px;"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+
+        <button id="mode-switcher-btn" onclick="openModeManager()">
+            <span id="current-mode-name">默认生活</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        
+        <div class="header-actions">
+            <span id="month-total" class="hidden">0</span>
+            <button class="icon-btn" onclick="togglePrivacy()">
+                <svg id="eye-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+            <button class="icon-btn" onclick="toggleSettings()">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+            </button>
+        </div>
+
+        <div id="settings-menu">
+            <div class="menu-item" onclick="showStats()" data-i18n="menu_stats">消费统计</div>
+            <div class="menu-item" onclick="prepareBackup()" data-i18n="menu_backup">备份数据</div>
+            <div class="menu-item" onclick="prepareRestore()" data-i18n="menu_restore">恢复数据</div>
+            <div class="menu-item" onclick="openLangManager()" data-i18n="menu_lang">语言 / Language</div>
+            <div style="height:1px; background:#3a3a3c; margin:4px 10px;"></div>
+            <div class="menu-item" onclick="exportToICS()" data-i18n="menu_export">导出日历</div>
+        </div>
+    </header>
+
+    <div class="calendar-section">
+        <div class="week-days" id="week-days-header">
+            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+        </div>
+        <div class="calendar-viewport" id="calendar-viewport">
+            <div id="days-grid-current" class="days-grid"></div>
+        </div>
+    </div>
+
+    <div class="notes-section">
+        <div class="notes-list" id="notes-list"></div>
+        
+        <div class="input-container" id="add-note-container">
+            <div class="tags-bar" id="tags-bar"></div>
+            <form class="input-row" onsubmit="event.preventDefault(); addNote();">
+                <button type="button" class="tag-toggle-btn" id="tag-toggle-btn" onclick="toggleTagsBar()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                </button>
+                <input type="text" id="quick-input" class="main-input" placeholder="备注...">
+                <input type="number" id="cost-input" class="cost-input" placeholder="¥">
+                <button type="submit" class="send-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="back-to-today-btn" onclick="goToToday('main')">今</div>
+
+    <!-- Mode Manager Overlay -->
+    <div id="mode-manager-overlay">
+        <div class="custom-prompt-box">
+            <div class="prompt-title" data-i18n="mode_title">模式切换</div>
+            <div class="mode-list" id="mode-list-container"></div>
+            <button class="add-mode-btn" onclick="showAddModeInput()" data-i18n="mode_new">+ 新建模式</button>
+            <div class="prompt-actions">
+                <button class="prompt-btn prompt-cancel" onclick="closeModeManager()" data-i18n="btn_close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Language Manager Overlay -->
+    <div id="lang-manager-overlay">
+        <div class="custom-prompt-box">
+            <div class="prompt-title">Language / 语言</div>
+            <div class="lang-list">
+                <div class="mode-wrapper">
+                    <div class="lang-item" onclick="switchLanguage('zh-CN')">
+                        <span class="lang-name">简体中文</span>
+                        <div class="mode-actions">
+                            <span id="check-zh-CN" class="mode-icon-btn" style="color:var(--accent-color); display:none;">✓</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mode-wrapper">
+                    <div class="lang-item" onclick="switchLanguage('en-US')">
+                        <span class="lang-name">English</span>
+                        <div class="mode-actions">
+                            <span id="check-en-US" class="mode-icon-btn" style="color:var(--accent-color); display:none;">✓</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="prompt-actions">
+                <button class="prompt-btn prompt-cancel" onclick="closeLangManager()" data-i18n="btn_close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Choice Overlay -->
+    <div id="backup-choice-overlay">
+        <div class="custom-prompt-box">
+            <div class="prompt-title" data-i18n="backup_choice_title">选择备份类型</div>
+            <div class="choice-list">
+                <div class="choice-wrapper">
+                    <div class="choice-item" onclick="selectBackupType('full')">
+                        <span class="choice-name" data-i18n="backup_full">全量备份 (所有模式)</span>
+                    </div>
+                </div>
+                <div class="choice-wrapper">
+                    <div class="choice-item" onclick="selectBackupType('current')">
+                        <span class="choice-name" data-i18n="backup_current">仅当前模式</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prompt-actions">
+                <button class="prompt-btn prompt-cancel" onclick="closeBackupChoice()" data-i18n="btn_cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Display Setting Overlay -->
+    <div id="display-setting-overlay">
+        <div class="custom-prompt-box">
+            <div class="prompt-title" data-i18n="display_title">日历显示偏好</div>
+            <div class="choice-list">
+                <div class="choice-wrapper">
+                    <div class="choice-item" onclick="setDisplayPreference('money')">
+                        <span class="choice-name" data-i18n="display_money">金额 (默认)</span>
+                        <span id="check-disp-money" class="mode-icon-btn" style="color:var(--accent-color); display:none;">✓</span>
+                    </div>
+                </div>
+                <div class="choice-wrapper">
+                    <div class="choice-item" onclick="setDisplayPreference('tag')">
+                        <span class="choice-name" data-i18n="display_tag">标签</span>
+                        <span id="check-disp-tag" class="mode-icon-btn" style="color:var(--accent-color); display:none;">✓</span>
+                    </div>
+                </div>
+                <div class="choice-wrapper">
+                    <div class="choice-item" onclick="setDisplayPreference('note')">
+                        <span class="choice-name" data-i18n="display_note">备注</span>
+                        <span id="check-disp-note" class="mode-icon-btn" style="color:var(--accent-color); display:none;">✓</span>
+                    </div>
+                </div>
+            </div>
+            <div class="prompt-actions">
+                <button class="prompt-btn prompt-cancel" onclick="closeDisplaySetting()" data-i18n="btn_close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Overlay (Replaces native confirm) -->
+    <div id="confirm-overlay">
+        <div class="custom-prompt-box">
+            <div class="prompt-title" id="confirm-title">确认</div>
+            <div class="prompt-desc" id="confirm-desc"></div>
+            <div class="prompt-actions">
+                <button class="prompt-btn prompt-cancel" id="confirm-cancel-btn" data-i18n="btn_cancel">取消</button>
+                <button class="prompt-btn prompt-confirm" id="confirm-ok-btn" data-i18n="btn_confirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-prompt-overlay">
+        <div class="custom-prompt-box">
+            <div class="prompt-title" id="prompt-title-text">请输入</div>
+            <div class="prompt-desc" id="prompt-desc-text" style="display:none"></div>
+            
+            <div class="input-wrapper">
+                <input type="text" id="prompt-input-text" class="prompt-input" placeholder="" oninput="toggleClearBtn()">
+                <input type="password" id="prompt-input-password" class="prompt-input" placeholder="" oninput="toggleClearBtn()">
+                
+                <button id="clear-input-btn" class="clear-btn" onclick="clearPromptInput()">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+                </button>
+            </div>
+
+            <div id="paste-text-btn" class="paste-text-btn" onclick="handlePasteRestore()" data-i18n="prompt_paste">从剪贴板粘贴数据</div>
+            
+            <div class="guide-link" id="guide-link" onclick="alert('正气APP - 我 - 设置 - 数据备份与恢复 - 备份数据到SD卡\n路径: /storage/emulated/0/Android/data/com.zhengnengliang.precepts/files/zhengqizs/backup/backup.txt')" style="display:none;" data-i18n="guide_text">如何导入外部数据？</div>
+
+            <div class="prompt-actions">
+                <button class="prompt-btn prompt-cancel" onclick="closeCustomPrompt()" data-i18n="btn_cancel">取消</button>
+                <button class="prompt-btn prompt-confirm" id="prompt-confirm-btn" data-i18n="btn_confirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tag-context-menu" onblur="closeTagContextMenu()">
+        <div class="context-item" onclick="moveTag(-1)" data-i18n="menu_move_up">前移</div>
+        <div class="context-item" onclick="moveTag(1)" data-i18n="menu_move_down">后移</div>
+        <div class="context-item" onclick="deleteTagFromMenu()" data-i18n="menu_delete">删除</div>
+    </div>
+
+    <div id="stats-view">
+        <div class="stats-header">
+            <span class="stats-title" data-i18n="stats_title">消费统计</span>
+            <button class="icon-btn" onclick="closeStats()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+        <div class="stats-content">
+            <div class="stats-section-title" data-i18n="stats_mode">当前模式</div>
+            <div class="stats-grid">
+                <div class="stats-card">
+                    <span class="stats-label" data-i18n="stats_month">本月支出</span>
+                    <span class="stats-val" id="stat-month-val">¥0</span>
+                </div>
+                <div class="stats-card">
+                    <span class="stats-label" data-i18n="stats_year">本年支出</span>
+                    <span class="stats-val" id="stat-year-val">¥0</span>
+                </div>
+            </div>
+
+            <div class="stats-section-title" data-i18n="stats_custom">自定义查询</div>
+            <div class="date-range-box">
+                <div style="margin-bottom:10px; color:#888; font-size:12px;" data-i18n="stats_filter">筛选项目:</div>
+                <div class="filter-tags-container">
+                    <div id="filter-all-btn" class="filter-tag selected" onclick="toggleFilterAll()" data-i18n="stats_all">全选</div>
+                    <div id="filter-tags-list" style="display:contents"></div>
+                </div>
+                <div class="date-inputs">
+                    <div id="range-start-display" class="range-input-mock" onclick="openStatsCalendar('start')" data-i18n="stats_start">选择开始</div>
+                    <span class="range-separator" id="range-separator">至</span>
+                    <div id="range-end-display" class="range-input-mock" onclick="openStatsCalendar('end')" data-i18n="stats_end">选择结束</div>
+                </div>
+                <div class="quick-range-btns">
+                    <button class="quick-range-btn" onclick="setQuickRange('month')" data-i18n="stats_this_month">本月</button>
+                    <button class="quick-range-btn" onclick="setQuickRange('year')" data-i18n="stats_this_year">本年</button>
+                </div>
+                <div id="range-result-container" style="margin-top:15px; border-top:1px solid #333; padding-top:15px;">
+                    <div class="result-summary">
+                        <div class="result-total" id="range-total-val">¥0</div>
+                        <div class="result-sub" id="range-count-val">共 0 笔</div>
+                    </div>
+                    <div class="tag-stats-list" id="range-detail-list" style="margin-top:10px;"></div>
+                </div>
+            </div>
+            <div style="height: 50px;"></div>
+        </div>
+    </div>
+
+    <div id="stats-calendar-overlay" onclick="closeStatsCalendar()"></div>
+    <div id="stats-calendar-modal">
+        <div class="rc-header">
+            <button id="stats-cal-title-btn" class="rc-title" style="background:none; border:none; color:white;" onclick="openDatePicker('stats')">
+                <span class="year"></span>
+                <span class="rc-title-m" style="font-size:16px; color:#888; margin-left:4px;"></span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:2px; margin-left:4px;"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+        </div>
+        <div class="week-days" id="stats-week-days-header" style="margin-top:10px;">
+            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+        </div>
+        <div class="rc-viewport" id="stats-cal-viewport">
+            <div id="stats-days-grid-current" class="stats-days-grid"></div>
+        </div>
+        <div id="stats-back-today-btn" onclick="goToToday('stats')">今</div>
+    </div>
+
+    <div id="picker-overlay" onclick="closeDatePicker()"></div>
+    <div id="picker-modal">
+        <div class="picker-toolbar">
+            <button class="picker-btn" style="color:#666" onclick="closeDatePicker()" data-i18n="btn_cancel">取消</button>
+            <span style="color:white; font-weight:600" data-i18n="picker_title">跳转日期</span>
+            <button class="picker-btn" onclick="confirmDatePick()" data-i18n="btn_confirm">确定</button>
+        </div>
+        <div class="picker-body">
+            <div class="picker-highlight"></div>
+            <div class="picker-col" id="col-year"></div>
+            <div class="picker-col" id="col-month"></div>
+        </div>
+    </div>
+    <div id="toast">提示</div>
+
+    <input type="file" id="restore-file-input" style="display:none" accept=".json,.txt,.csv">
+
+    <script>
+        // --- I18n Engine ---
+        const translations = {
+            'zh-CN': {
+                'menu_stats': '消费统计',
+                'menu_backup': '备份数据',
+                'menu_restore': '恢复数据',
+                'menu_lang': '语言 / Language',
+                'menu_export': '导出日历',
+                'weekdays': ['日', '一', '二', '三', '四', '五', '六'],
+                'mode_title': '模式切换',
+                'mode_new': '+ 添加标签',
+                'btn_close': '关闭',
+                'btn_cancel': '取消',
+                'btn_confirm': '确定',
+                'btn_file': '选择文件',
+                'btn_restore': '恢复',
+                'stats_title': '消费统计',
+                'stats_mode': '当前模式',
+                'stats_month': '本月支出',
+                'stats_year': '本年支出',
+                'stats_custom': '自定义查询',
+                'stats_filter': '筛选项目:',
+                'stats_all': '全选',
+                'stats_start': '选择开始',
+                'stats_end': '选择结束',
+                'stats_to': '至',
+                'stats_this_month': '本月',
+                'stats_this_year': '本年',
+                'picker_title': '跳转日期',
+                'input_placeholder': '备注...',
+                'prompt_tag_title': '请输入新标签',
+                'prompt_mode_new': '新建模式',
+                'prompt_mode_name': '输入模式名称',
+                'prompt_mode_rename': '重命名模式',
+                'prompt_mode_new_name': '输入新名称',
+                'prompt_backup_title': '备份选项',
+                'prompt_backup_desc': '输入密码以加密，留空则不加密',
+                'prompt_restore_title': '恢复数据',
+                'prompt_restore_desc': '请粘贴数据或选择文件',
+                'prompt_paste': '从剪贴板粘贴数据',
+                'prompt_decrypt': '解密备份',
+                'prompt_password': '请输入密码',
+                'toast_switched': '已切换: ',
+                'toast_renamed': '模式名已修改',
+                'toast_encrypted_fail': '加密失败',
+                'toast_decrypt_fail': '密码错误',
+                'toast_data_error': '数据格式错误',
+                'toast_copied': '备份已复制到剪贴板',
+                'toast_pasted': '已粘贴',
+                'toast_restored': '全量数据已恢复',
+                'toast_legacy': '旧版数据已导入',
+                'toast_no_data': '当前模式无数据',
+                'toast_exported': '日历导出成功',
+                'delete_confirm': '确定要删除该模式及其所有数据吗？不可撤销！',
+                'restore_confirm_full': '这将覆盖当前的【所有模式】数据，确定吗？',
+                'restore_confirm_legacy': '检测到旧版备份。\n是否导入到当前模式【{mode}】中？\n(这会覆盖当前模式的现有数据)',
+                'delete': '删除',
+                'menu_move_up': '前移',
+                'menu_move_down': '后移',
+                'menu_delete': '删除',
+                'currency_symbol': '¥',
+                'stat_count_suffix': '次',
+                'stat_total_prefix': '共 ',
+                'stat_total_suffix': ' 笔',
+                'calendar_date_fmt': 'zh', // Custom marker
+                'guide_text': '如何导入外部数据？',
+                'zhengqi_detected': '检测到正气备份数据。\n是否导入为新模式【正气记录】？',
+                'zhengqi_imported': '正气数据已导入',
+                'backup_choice_title': '选择备份类型',
+                'backup_full': '全量备份 (所有模式)',
+                'backup_current': '仅当前模式',
+                'display_title': '日历显示偏好',
+                'display_money': '金额 (默认)',
+                'display_tag': '标签',
+                'display_note': '备注',
+            },
+            'en-US': {
+                'menu_stats': 'Statistics',
+                'menu_backup': 'Backup Data',
+                'menu_restore': 'Restore Data',
+                'menu_lang': 'Language / Language',
+                'menu_export': 'Export Calendar',
+                'weekdays': ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                'mode_title': 'Switch Mode',
+                'mode_new': '+ Add Tag',
+                'btn_close': 'Close',
+                'btn_cancel': 'Cancel',
+                'btn_confirm': 'Confirm',
+                'btn_file': 'Select File',
+                'btn_restore': 'Restore',
+                'stats_title': 'Statistics',
+                'stats_mode': 'Current Mode',
+                'stats_month': 'Month Total',
+                'stats_year': 'Year Total',
+                'stats_custom': 'Custom Range',
+                'stats_filter': 'Filter:',
+                'stats_all': 'All',
+                'stats_start': 'Start Date',
+                'stats_end': 'End Date',
+                'stats_to': 'to',
+                'stats_this_month': 'This Month',
+                'stats_this_year': 'This Year',
+                'picker_title': 'Jump to Date',
+                'input_placeholder': 'Note...',
+                'prompt_tag_title': 'New Tag',
+                'prompt_mode_new': 'New Mode',
+                'prompt_mode_name': 'Mode Name',
+                'prompt_mode_rename': 'Rename Mode',
+                'prompt_mode_new_name': 'New Name',
+                'prompt_backup_title': 'Backup Options',
+                'prompt_backup_desc': 'Password (Optional)',
+                'prompt_restore_title': 'Restore Data',
+                'prompt_restore_desc': 'Paste data or select file',
+                'prompt_paste': 'Paste from Clipboard',
+                'prompt_decrypt': 'Decrypt Backup',
+                'prompt_password': 'Enter Password',
+                'toast_switched': 'Switched to: ',
+                'toast_renamed': 'Renamed successfully',
+                'toast_encrypted_fail': 'Encryption Failed',
+                'toast_decrypt_fail': 'Wrong Password',
+                'toast_data_error': 'Invalid Data',
+                'toast_copied': 'Copied to Clipboard',
+                'toast_pasted': 'Pasted',
+                'toast_restored': 'All Data Restored',
+                'toast_legacy': 'Legacy Data Imported',
+                'toast_no_data': 'No data to export',
+                'toast_exported': 'Exported Successfully',
+                'delete_confirm': 'Delete this mode and ALL its data? Irreversible!',
+                'restore_confirm_full': 'This will overwrite ALL data in ALL modes. Continue?',
+                'restore_confirm_legacy': 'Legacy backup detected.\nImport into current mode [{mode}]?\n(Overwrites current mode data)',
+                'delete': 'Delete',
+                'menu_move_up': 'Move Up',
+                'menu_move_down': 'Move Down',
+                'menu_delete': 'Delete',
+                'currency_symbol': '$',
+                'stat_count_suffix': ' times',
+                'stat_total_prefix': 'Total ',
+                'stat_total_suffix': ' items',
+                'calendar_date_fmt': 'en',
+                'guide_text': 'How to import external data?',
+                'zhengqi_detected': 'Zhengqi backup detected.\nImport as new mode [Zhengqi Record]?',
+                'zhengqi_imported': 'Zhengqi data imported',
+                'backup_choice_title': 'Backup Type',
+                'backup_full': 'Full Backup (All Modes)',
+                'backup_current': 'Current Mode Only',
+                'display_title': 'Calendar Display',
+                'display_money': 'Amount (Default)',
+                'display_tag': 'Tag',
+                'display_note': 'Note',
+            }
+        };
+
+        let currentLang = localStorage.getItem('privacy_lang') || 'zh-CN';
+
+        function t(key) {
+            return translations[currentLang][key] || key;
+        }
+
+        // --- 全局状态 ---
+        let currentDate = new Date();
+        let realDate = new Date();
+        let selectedDateKey = formatDateKey(realDate); 
+        
+        let privacyModes = [];
+        let currentModeId = 'default';
+        let currentSwipedModeId = null; 
+
+        let notes = {};
+        let customTags = [];
+        let modeSettings = {}; // Store settings per mode
+        
+        let editingIndex = -1; // -1 means adding new, >=0 means editing existing
+        let pickerYear = currentDate.getFullYear();
+        let pickerMonth = currentDate.getMonth() + 1;
+        let currentSwipedIndex = -1;
+        let isPrivacyMode = false;
+        let selectedTag = ""; 
+
+        let filterSelectedTags = []; 
+        let isFilterAll = true;      
+        let rangePickerType = 'start';
+        let statsDate = new Date(); 
+        let rangeStartVal = null;
+        let rangeEndVal = null;
+        let pickerSource = 'main';
+        
+        let contextMenuTagIndex = -1;
+        let currentPromptMode = ''; 
+        let pendingRestoreData = null; 
+        let backupType = 'full'; // 'full' or 'current'
+        let targetDisplaySettingModeId = null;
+        let confirmCallback = null;
+
+        function init() {
+            const savedPrivacy = localStorage.getItem('privacy_mode');
+            if (savedPrivacy === 'true') { isPrivacyMode = true; updateEyeIcon(); }
+
+            checkV4Migration();
+            loadModes();
+            loadCurrentModeData();
+            applyLanguage();
+
+            renderCalendarGrid(currentDate, 'days-grid-current', 'main');
+            updateHeader();
+            renderNotesList();
+            renderTags();
+            initPickerData();
+            
+            initSwipe('calendar-viewport', 'main');
+            initSwipe('stats-cal-viewport', 'stats');
+            
+            initInputListeners();
+            updateBackToTodayButton('main');
+            
+            setQuickRange('month');
+            
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.tag-chip') && !e.target.closest('#tag-context-menu')) {
+                    closeTagContextMenu();
+                }
+            });
+
+            document.getElementById('restore-file-input').addEventListener('change', handleFileSelect);
+        }
+
+        function applyLanguage() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                el.innerText = t(key);
+            });
+            
+            const weekDays = t('weekdays');
+            const weekHeaderMain = document.querySelector('.week-days');
+            const weekHeaderStats = document.getElementById('stats-week-days-header');
+            
+            const html = weekDays.map(d => `<div>${d}</div>`).join('');
+            weekHeaderMain.innerHTML = html;
+            weekHeaderStats.innerHTML = html;
+
+            document.getElementById('quick-input').placeholder = t('input_placeholder');
+            document.getElementById('cost-input').placeholder = t('currency_symbol');
+            
+            document.getElementById('range-separator').innerText = t('stats_to');
+
+            document.getElementById('check-zh-CN').style.display = currentLang === 'zh-CN' ? 'block' : 'none';
+            document.getElementById('check-en-US').style.display = currentLang === 'en-US' ? 'block' : 'none';
+        }
+
+        function switchLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('privacy_lang', lang);
+            closeLangManager();
+            applyLanguage();
+            updateHeader();
+            renderCalendarGrid(currentDate, 'days-grid-current', 'main'); 
+            renderNotesList(); 
+            updateRangeDisplay();
+            // Re-render tag bar button text
+            renderTags();
+            if(document.getElementById('mode-manager-overlay').classList.contains('active')) renderModeList();
+            if(document.getElementById('stats-view').classList.contains('active')) showStats();
+        }
+
+        function openLangManager() {
+            toggleSettings();
+            document.getElementById('lang-manager-overlay').classList.add('active');
+        }
+
+        function closeLangManager() {
+            document.getElementById('lang-manager-overlay').classList.remove('active');
+        }
+
+        function checkV4Migration() {
+            if (!localStorage.getItem('privacy_modes')) {
+                const defaultId = 'default';
+                const initialModes = [{ id: defaultId, name: '默认生活' }];
+                localStorage.setItem('privacy_modes', JSON.stringify(initialModes));
+                localStorage.setItem('privacy_current_mode', defaultId);
+
+                const oldNotes = localStorage.getItem('privacy_notes');
+                if (oldNotes) {
+                    localStorage.setItem(`privacy_notes_${defaultId}`, oldNotes);
+                    localStorage.removeItem('privacy_notes'); 
+                }
+                
+                const oldTags = localStorage.getItem('privacy_custom_tags');
+                if (oldTags) {
+                    localStorage.setItem(`privacy_custom_tags_${defaultId}`, oldTags);
+                    localStorage.removeItem('privacy_custom_tags'); 
+                }
+            }
+        }
+
+        function loadModes() {
+            privacyModes = JSON.parse(localStorage.getItem('privacy_modes') || '[]');
+            currentModeId = localStorage.getItem('privacy_current_mode') || 'default';
+            if (!privacyModes.find(m => m.id === currentModeId) && privacyModes.length > 0) {
+                currentModeId = privacyModes[0].id;
+                localStorage.setItem('privacy_current_mode', currentModeId);
+            }
+            updateModeButtonText();
+        }
+
+        function loadCurrentModeData() {
+            notes = JSON.parse(localStorage.getItem(`privacy_notes_${currentModeId}`) || '{}');
+            customTags = JSON.parse(localStorage.getItem(`privacy_custom_tags_${currentModeId}`) || '[]');
+            modeSettings = JSON.parse(localStorage.getItem(`privacy_settings_${currentModeId}`) || '{}');
+        }
+
+        function saveCurrentModeData() {
+            localStorage.setItem(`privacy_notes_${currentModeId}`, JSON.stringify(notes));
+            localStorage.setItem(`privacy_custom_tags_${currentModeId}`, JSON.stringify(customTags));
+            localStorage.setItem(`privacy_settings_${currentModeId}`, JSON.stringify(modeSettings));
+        }
+
+        function updateModeButtonText() {
+            const mode = privacyModes.find(m => m.id === currentModeId);
+            const name = mode ? mode.name : 'Unknown';
+            document.getElementById('current-mode-name').innerText = name;
+        }
+
+        // --- Custom Confirm Logic ---
+        function showCustomConfirm(title, desc, onConfirm) {
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-desc').innerText = desc;
+            confirmCallback = onConfirm;
+            document.getElementById('confirm-overlay').classList.add('active');
+            
+            // Re-bind buttons to avoid stacking listeners
+            document.getElementById('confirm-cancel-btn').onclick = closeCustomConfirm;
+            document.getElementById('confirm-ok-btn').onclick = () => {
+                if (confirmCallback) confirmCallback();
+                closeCustomConfirm();
+            };
+        }
+
+        function closeCustomConfirm() {
+            document.getElementById('confirm-overlay').classList.remove('active');
+            confirmCallback = null;
+        }
+
+        // --- 模式管理 UI ---
+        function openModeManager() {
+            renderModeList();
+            document.getElementById('mode-manager-overlay').classList.add('active');
+        }
+
+        function closeModeManager() {
+            document.getElementById('mode-manager-overlay').classList.remove('active');
+            currentSwipedModeId = null; 
+        }
+
+        function renderModeList() {
+            const container = document.getElementById('mode-list-container');
+            container.innerHTML = '';
+            
+            const canDelete = privacyModes.length > 1;
+
+            privacyModes.forEach(mode => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'mode-wrapper';
+                
+                if (canDelete) {
+                    const delBg = document.createElement('div');
+                    delBg.className = 'mode-delete-bg';
+                    delBg.innerText = t('delete');
+                    delBg.onclick = (e) => { e.stopPropagation(); deleteMode(mode.id); };
+                    wrapper.appendChild(delBg);
+                }
+
+                const slider = document.createElement('div');
+                slider.className = `mode-slider ${mode.id === currentModeId ? 'active' : ''}`;
+                slider.dataset.modeId = mode.id; 
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'mode-name';
+                nameSpan.innerText = mode.name;
+                
+                const editInput = document.createElement('input');
+                editInput.className = 'mode-name-input';
+                editInput.style.display = 'none';
+                editInput.value = mode.name;
+                editInput.onblur = () => finishInlineEdit(mode.id, editInput.value);
+                editInput.onkeydown = (e) => { if(e.key === 'Enter') editInput.blur(); };
+                editInput.onclick = (e) => e.stopPropagation(); 
+
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'mode-actions';
+                
+                // Display settings button
+                const settingsBtn = document.createElement('span');
+                settingsBtn.className = 'mode-icon-btn';
+                settingsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>';
+                settingsBtn.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    openDisplaySetting(mode.id);
+                };
+                
+                const editBtn = document.createElement('span');
+                editBtn.className = 'mode-icon-btn';
+                editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>';
+                editBtn.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    startInlineEdit(slider, nameSpan, editInput); 
+                };
+                
+                actionsDiv.appendChild(settingsBtn);
+                actionsDiv.appendChild(editBtn);
+
+                slider.appendChild(nameSpan);
+                slider.appendChild(editInput);
+                slider.appendChild(actionsDiv);
+
+                slider.onclick = (e) => {
+                    if (editInput.style.display === 'block') return;
+                    if (currentSwipedModeId === mode.id) {
+                        resetModeSwipe(mode.id);
+                        return;
+                    }
+                    switchMode(mode.id);
+                };
+
+                if (canDelete) {
+                    addModeSwipeLogic(slider, mode.id);
+                }
+
+                wrapper.appendChild(slider);
+                container.appendChild(wrapper);
+            });
+        }
+
+        // --- Display Settings ---
+        function openDisplaySetting(modeId) {
+            targetDisplaySettingModeId = modeId;
+            // Load current setting
+            const settings = JSON.parse(localStorage.getItem(`privacy_settings_${modeId}`) || '{}');
+            const displayPref = settings.displayPref || 'money';
+            
+            // Update checkmarks
+            ['money', 'tag', 'note'].forEach(type => {
+                document.getElementById(`check-disp-${type}`).style.display = (displayPref === type) ? 'block' : 'none';
+            });
+            
+            document.getElementById('display-setting-overlay').classList.add('active');
+        }
+
+        function setDisplayPreference(pref) {
+            if (!targetDisplaySettingModeId) return;
+            
+            const settingsKey = `privacy_settings_${targetDisplaySettingModeId}`;
+            const settings = JSON.parse(localStorage.getItem(settingsKey) || '{}');
+            settings.displayPref = pref;
+            localStorage.setItem(settingsKey, JSON.stringify(settings));
+            
+            // If editing current mode, refresh immediately
+            if (targetDisplaySettingModeId === currentModeId) {
+                modeSettings = settings;
+                renderCalendarGrid(currentDate, 'days-grid-current', 'main');
+            }
+            
+            closeDisplaySetting();
+        }
+
+        function closeDisplaySetting() {
+            document.getElementById('display-setting-overlay').classList.remove('active');
+            targetDisplaySettingModeId = null;
+        }
+
+        // --- 模式滑动逻辑 ---
+        function addModeSwipeLogic(slider, modeId) {
+            let startX = 0;
+            let currentX = 0;
+            let isSwiping = false;
+
+            slider.addEventListener('touchstart', (e) => {
+                if (slider.querySelector('input').style.display === 'block') return;
+                startX = e.touches[0].clientX;
+                isSwiping = true;
+                slider.style.transition = 'none';
+            }, {passive: true});
+
+            slider.addEventListener('touchmove', (e) => {
+                if (!isSwiping) return;
+                const diff = e.touches[0].clientX - startX;
+                if (diff < 0 && diff > -100) {
+                    currentX = diff;
+                    slider.style.transform = `translateX(${diff}px)`;
+                }
+            }, {passive: true});
+
+            slider.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                isSwiping = false;
+                slider.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                
+                if (currentX < -40) {
+                    slider.style.transform = `translateX(-70px)`;
+                    if (currentSwipedModeId && currentSwipedModeId !== modeId) {
+                        resetModeSwipe(currentSwipedModeId);
+                    }
+                    currentSwipedModeId = modeId;
+                } else {
+                    slider.style.transform = `translateX(0)`;
+                    if (currentSwipedModeId === modeId) currentSwipedModeId = null;
+                }
+                currentX = 0;
+            }, {passive: true});
+        }
+
+        function resetModeSwipe(modeId) {
+            const slider = document.querySelector(`.mode-slider[data-mode-id="${modeId}"]`);
+            if (slider) slider.style.transform = `translateX(0)`;
+            currentSwipedModeId = null;
+        }
+
+        function startInlineEdit(slider, span, input) {
+            span.style.display = 'none';
+            input.style.display = 'block';
+            input.focus();
+            slider.style.transform = `translateX(0)`;
+        }
+
+        function finishInlineEdit(id, newName) {
+            const mode = privacyModes.find(m => m.id === id);
+            const trimmedName = newName.trim();
+            
+            if (mode && trimmedName && trimmedName !== mode.name) {
+                mode.name = trimmedName;
+                localStorage.setItem('privacy_modes', JSON.stringify(privacyModes));
+                updateModeButtonText();
+                showToast(t('toast_renamed'));
+            }
+            
+            renderModeList();
+        }
+
+        function switchMode(id) {
+            if (currentModeId === id) return;
+            currentModeId = id;
+            localStorage.setItem('privacy_current_mode', id);
+            
+            loadCurrentModeData();
+            
+            selectedDateKey = formatDateKey(currentDate); 
+            renderCalendarGrid(currentDate, 'days-grid-current', 'main');
+            updateHeader();
+            renderNotesList();
+            renderTags();
+            updateModeButtonText();
+            
+            if(document.getElementById('stats-view').classList.contains('active')) showStats();
+
+            closeModeManager();
+            showToast(t('toast_switched') + privacyModes.find(m => m.id === id).name);
+        }
+
+        function showAddModeInput() {
+            closeModeManager();
+            currentPromptMode = 'add_mode';
+            showCustomPromptInternal(t('prompt_mode_new'), t('prompt_mode_name'), 'text', '');
+        }
+
+        function createMode(name) {
+            const newId = 'mode_' + Date.now();
+            privacyModes.push({ id: newId, name: name });
+            localStorage.setItem('privacy_modes', JSON.stringify(privacyModes));
+            switchMode(newId);
+        }
+
+        function deleteMode(id) {
+            showCustomConfirm(t('delete'), t('delete_confirm'), () => {
+                localStorage.removeItem(`privacy_notes_${id}`);
+                localStorage.removeItem(`privacy_custom_tags_${id}`);
+                localStorage.removeItem(`privacy_settings_${id}`);
+                
+                privacyModes = privacyModes.filter(m => m.id !== id);
+                localStorage.setItem('privacy_modes', JSON.stringify(privacyModes));
+                
+                if (currentModeId === id) {
+                    switchMode(privacyModes[0].id);
+                } else {
+                    renderModeList(); 
+                }
+            });
+        }
+
+        function formatDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getNotesArray(key) {
+            const data = notes[key];
+            if (!data) return [];
+            if (Array.isArray(data)) {
+                return data.map(item => {
+                    if (typeof item === 'string') return { tag: '', text: item, cost: '' };
+                    if (!item.tag) item.tag = '';
+                    return item;
+                });
+            }
+            return [];
+        }
+
+        function parseCost(val) { return val ? parseFloat(val) : 0; }
+
+        // --- 核心：新增笔记或更新笔记 (Fixed) ---
+        function addNote() {
+            const textInput = document.getElementById('quick-input'); 
+            const costInput = document.getElementById('cost-input');
+            const text = textInput.value.trim(); 
+            const cost = costInput.value.trim();
+            
+            if (!text && !cost && !selectedTag) return; 
+            
+            let list = getNotesArray(selectedDateKey);
+            
+            // Update existing if editingIndex is set
+            if (editingIndex > -1 && editingIndex < list.length) {
+                list[editingIndex] = { tag: selectedTag, text: text, cost: cost };
+            } else {
+                list.push({ tag: selectedTag, text: text, cost: cost });
+            }
+            
+            notes[selectedDateKey] = list;
+            saveCurrentModeData(); 
+            
+            // Reset state
+            textInput.value = ''; 
+            costInput.value = ''; 
+            editingIndex = -1; // Stop editing
+            selectTag(""); 
+            
+            renderNotesList(); 
+            renderCalendarGrid(currentDate, 'days-grid-current', 'main'); 
+            updateHeader();
+            setTimeout(() => { const container = document.getElementById('notes-list'); container.scrollTop = container.scrollHeight; }, 50);
+            textInput.blur(); 
+            costInput.blur();
+        }
+
+        function openStatsCalendar(type) {
+            rangePickerType = type;
+            const val = type === 'start' ? rangeStartVal : rangeEndVal;
+            statsDate = val ? new Date(val) : new Date();
+            updateStatsHeader(); renderCalendarGrid(statsDate, 'stats-days-grid-current', 'stats');
+            updateBackToTodayButton('stats');
+            document.getElementById('stats-calendar-overlay').classList.add('active');
+            document.getElementById('stats-calendar-modal').classList.add('active');
+        }
+
+        function closeStatsCalendar() {
+            document.getElementById('stats-calendar-overlay').classList.remove('active');
+            document.getElementById('stats-calendar-modal').classList.remove('active');
+        }
+
+        function updateStatsHeader() {
+            const titleBtn = document.getElementById('stats-cal-title-btn');
+            
+            if (currentLang === 'zh-CN') {
+                titleBtn.querySelector('.year').innerText = statsDate.getFullYear();
+                titleBtn.querySelector('.rc-title-m').innerText = (statsDate.getMonth() + 1) + '月';
+            } else {
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                titleBtn.querySelector('.year').innerText = "";
+                titleBtn.querySelector('.rc-title-m').innerText = monthNames[statsDate.getMonth()] + " " + statsDate.getFullYear();
+            }
+        }
+
+        function renderCalendarGrid(dateObj, containerId, mode) {
+            const year = dateObj.getFullYear(); const month = dateObj.getMonth();
+            const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            let container = document.getElementById(containerId);
+            if(!container) {
+                container = document.createElement('div'); 
+                container.id = containerId; 
+                container.className = mode === 'stats' ? 'stats-days-grid' : 'days-grid';
+                if(mode === 'stats') { container.style.position = 'absolute'; container.style.top = '0'; container.style.left = '0'; }
+            }
+            container.innerHTML = '';
+            
+            for(let i=0; i<firstDay; i++) container.appendChild(document.createElement('div'));
+            const todayStr = formatDateKey(realDate);
+            const targetVal = mode === 'stats' ? (rangePickerType === 'start' ? rangeStartVal : rangeEndVal) : selectedDateKey;
+
+            const currencySymbol = t('currency_symbol');
+            const displayPref = modeSettings.displayPref || 'money'; 
+
+            for(let d=1; d<=daysInMonth; d++) {
+                const cell = document.createElement('div'); cell.className = 'day-cell';
+                const numberSpan = document.createElement('div'); numberSpan.className = 'day-number'; numberSpan.innerText = d;
+                cell.appendChild(numberSpan);
+                const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                
+                if(dateKey === todayStr) cell.classList.add('today');
+                if(targetVal === dateKey) cell.classList.add('selected'); 
+                
+                const dayNotes = getNotesArray(dateKey);
+                if(dayNotes.length > 0) {
+                    if (mode === 'stats') {
+                        const dot = document.createElement('div'); dot.className = 'day-dot'; cell.appendChild(dot);
+                    } else {
+                        let contentToShow = null;
+                        let type = '';
+
+                        let dayCost = 0;
+                        const firstTag = dayNotes.find(n => n.tag)?.tag;
+                        const firstNote = dayNotes.find(n => n.text)?.text;
+                        dayNotes.forEach(n => { if(n.cost) dayCost += parseFloat(n.cost) });
+
+                        if (displayPref === 'money') {
+                            if (dayCost > 0) { contentToShow = `${currencySymbol}${dayCost}`; type = 'money'; }
+                        } else if (displayPref === 'tag') {
+                            if (firstTag) { contentToShow = firstTag; type = 'tag'; }
+                        } else if (displayPref === 'note') {
+                            if (firstNote) { 
+                                contentToShow = firstNote.length > 3 ? firstNote.substring(0, 3) + '...' : firstNote; 
+                                type = 'note'; 
+                            }
+                        }
+
+                        if (!contentToShow) {
+                            if (dayCost > 0) { contentToShow = `${currencySymbol}${dayCost}`; type = 'money'; }
+                            else if (firstTag) { contentToShow = firstTag; type = 'tag'; }
+                            else if (firstNote) { 
+                                contentToShow = firstNote.length > 3 ? firstNote.substring(0, 3) + '...' : firstNote; 
+                                type = 'note'; 
+                            }
+                        }
+
+                        if (contentToShow) {
+                            const infoSpan = document.createElement('span'); 
+                            infoSpan.className = `day-content-preview money`; 
+                            infoSpan.innerText = isPrivacyMode ? '***' : contentToShow; 
+                            if (isPrivacyMode && type === 'money') infoSpan.style.letterSpacing = '-2px'; 
+                            cell.appendChild(infoSpan);
+                        } else {
+                            const dot = document.createElement('div'); 
+                            dot.className = 'day-content-preview dot'; 
+                            dot.innerText = '•';
+                            cell.appendChild(dot);
+                        }
+                    }
+                }
+                cell.onclick = () => {
+                    if (mode === 'stats') {
+                        if(rangePickerType === 'start') rangeStartVal = dateKey; else rangeEndVal = dateKey;
+                        updateRangeDisplay(); closeStatsCalendar(); calcCustomRange();
+                    } else { selectDate(dateKey, new Date(year, month, d)); }
+                };
+                container.appendChild(cell);
+            }
+            const viewportId = mode === 'stats' ? 'stats-cal-viewport' : 'calendar-viewport';
+            requestAnimationFrame(() => {
+                const height = container.scrollHeight;
+                const finalHeight = height > 0 ? height : 300;
+                document.getElementById(viewportId).style.height = finalHeight + 'px';
+            });
+            return container;
+        }
+
+        function initSwipe(id, mode) { 
+            let startX = 0; const area = document.getElementById(id);
+            area.addEventListener('touchstart', e => startX = e.changedTouches[0].screenX, {passive: true});
+            area.addEventListener('touchend', e => { 
+                const diff = startX - e.changedTouches[0].screenX; 
+                if (Math.abs(diff) > 50) slideCalendar(diff > 0 ? 1 : -1, mode); 
+            }, {passive: true});
+        }
+
+        function slideCalendar(direction, mode) {
+            const viewportId = mode === 'stats' ? 'stats-cal-viewport' : 'calendar-viewport';
+            const currentId = mode === 'stats' ? 'stats-days-grid-current' : 'days-grid-current';
+            const nextId = mode === 'stats' ? 'stats-days-grid-next' : 'days-grid-next';
+            
+            const viewport = document.getElementById(viewportId);
+            const currentGrid = document.getElementById(currentId);
+            
+            let baseDate = mode === 'main' ? currentDate : statsDate;
+            const nextDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + direction, 1);
+            
+            if (mode === 'main') currentDate = nextDate; else statsDate = nextDate;
+
+            const nextGrid = renderCalendarGrid(nextDate, nextId, mode); 
+            nextGrid.id = nextId; 
+            viewport.appendChild(nextGrid);
+            
+            nextGrid.style.left = direction === 1 ? '100%' : '-100%'; 
+            void nextGrid.offsetWidth; 
+
+            const duration = 250; 
+            currentGrid.style.transition = `left ${duration}ms ease-out`; 
+            nextGrid.style.transition = `left ${duration}ms ease-out`;
+            currentGrid.style.left = direction === 1 ? '-100%' : '100%'; 
+            nextGrid.style.left = '0%';
+
+            setTimeout(() => { 
+                currentGrid.remove(); 
+                nextGrid.id = currentId; 
+                nextGrid.style.transition = ''; 
+                if (mode === 'main') { updateHeader(); updateBackToTodayButton('main'); } 
+                else { updateStatsHeader(); updateBackToTodayButton('stats'); }
+            }, duration);
+        }
+
+        function updateBackToTodayButton(mode) {
+            const btnId = mode === 'main' ? 'back-to-today-btn' : 'stats-back-today-btn';
+            const btn = document.getElementById(btnId);
+            const todayStr = formatDateKey(realDate);
+            let isNotSelectedToday = false;
+            let viewDate = mode === 'main' ? currentDate : statsDate;
+            
+            if (mode === 'main') {
+                isNotSelectedToday = selectedDateKey !== todayStr;
+            } else {
+                const currentTarget = rangePickerType === 'start' ? rangeStartVal : rangeEndVal;
+                isNotSelectedToday = currentTarget !== todayStr;
+            }
+
+            const isNotCurrentView = (viewDate.getFullYear() !== realDate.getFullYear()) || (viewDate.getMonth() !== realDate.getMonth());
+            
+            if (isNotSelectedToday || isNotCurrentView) btn.classList.add('visible'); 
+            else btn.classList.remove('visible');
+        }
+
+        function goToToday(mode) {
+            const todayStr = formatDateKey(realDate);
+            if (mode === 'main') {
+                currentDate = new Date(realDate); selectedDateKey = todayStr; 
+                renderCalendarGrid(currentDate, 'days-grid-current', 'main'); updateHeader(); renderNotesList(); updateBackToTodayButton('main');
+            } else {
+                statsDate = new Date(realDate);
+                renderCalendarGrid(statsDate, 'stats-days-grid-current', 'stats'); updateStatsHeader(); updateBackToTodayButton('stats');
+                if(rangePickerType === 'start') rangeStartVal = todayStr; else rangeEndVal = todayStr;
+                updateRangeDisplay(); closeStatsCalendar(); calcCustomRange();
+            }
+        }
+
+        // --- 核心：修复后的 SelectDate ---
+        function selectDate(dateKey, dateObj) {
+            // 1. 修复跨日期数据转移Bug: 切换日期时，清空输入框并重置编辑状态
+            document.getElementById('quick-input').value = '';
+            document.getElementById('cost-input').value = '';
+            editingIndex = -1;
+            selectedTag = "";
+            renderTags(); // 清除标签高亮
+            
+            selectedDateKey = dateKey;
+            if(dateObj && dateObj.getMonth() !== currentDate.getMonth()) {
+                currentDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+                updateHeader(); renderCalendarGrid(currentDate, 'days-grid-current', 'main');
+            } else { renderCalendarGrid(currentDate, 'days-grid-current', 'main'); }
+            
+            currentSwipedIndex = -1; 
+            toggleInputContainer(true); 
+            renderNotesList(); 
+            updateBackToTodayButton('main');
+        }
+        
+        // --- 核心：修复后的 RenderNotesList ---
+        function renderNotesList() {
+            const container = document.getElementById('notes-list'); container.innerHTML = '';
+            const list = getNotesArray(selectedDateKey); currentSwipedIndex = -1;
+            const currencySymbol = t('currency_symbol');
+
+            if (list.length === 0) return;
+            list.forEach((note, index) => {
+                const wrapper = document.createElement('div'); wrapper.className = 'note-wrapper';
+                const delBg = document.createElement('div'); delBg.className = 'delete-action-bg'; delBg.innerText = t('delete');
+                delBg.onclick = (e) => { e.stopPropagation(); deleteNote(index); };
+                
+                const slider = document.createElement('div'); 
+                slider.className = 'note-slider';
+                // 新增：如果当前处于编辑状态，高亮显示
+                if (index === editingIndex) slider.classList.add('being-edited');
+                
+                if (note.tag) { const tagBadge = document.createElement('span'); tagBadge.className = 'note-tag-badge'; tagBadge.innerText = note.tag; slider.appendChild(tagBadge); }
+                const textSpan = document.createElement('span'); textSpan.className = 'note-content'; textSpan.innerText = note.text; slider.appendChild(textSpan);
+                if (note.cost) { const costSpan = document.createElement('span'); costSpan.className = 'note-cost-badge'; costSpan.innerText = isPrivacyMode ? '***' : `${currencySymbol}${note.cost}`; slider.appendChild(costSpan); }
+                addSwipeLogic(slider, index);
+                
+                // 核心修复：点击编辑时，不再删除原笔记，而是加载到输入框并高亮
+                slider.onclick = () => {
+                    if (currentSwipedIndex === index) resetSwipe(index);
+                    else {
+                        if (currentSwipedIndex !== -1) resetSwipe(currentSwipedIndex);
+                        
+                        // 加载数据到输入框
+                        document.getElementById('quick-input').value = note.text; 
+                        document.getElementById('cost-input').value = note.cost;
+                        if (note.tag) selectTag(note.tag); else selectTag(""); 
+                        
+                        // 设置编辑状态
+                        editingIndex = index;
+                        renderNotesList(); // 重新渲染以显示高亮边框
+                        
+                        document.getElementById('quick-input').focus();
+                    }
+                };
+                wrapper.appendChild(delBg); wrapper.appendChild(slider); container.appendChild(wrapper);
+            });
+        }
+        
+        function deleteNote(index) {
+            const list = getNotesArray(selectedDateKey); list.splice(index, 1);
+            if (list.length === 0) delete notes[selectedDateKey]; else notes[selectedDateKey] = list;
+            saveCurrentModeData();
+            
+            // 如果删除的是正在编辑的笔记，重置编辑状态
+            if (editingIndex === index) {
+                editingIndex = -1;
+                document.getElementById('quick-input').value = '';
+                document.getElementById('cost-input').value = '';
+                selectTag("");
+            }
+            
+            currentSwipedIndex = -1; renderNotesList(); renderCalendarGrid(currentDate, 'days-grid-current', 'main'); updateHeader();
+        }
+        function toggleInputContainer(show) { const el = document.getElementById('add-note-container'); if(show) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+        function initInputListeners() {
+            const focusHandler = (e) => { setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'end' }), 300); };
+            document.getElementById('quick-input').addEventListener('focus', focusHandler);
+            document.getElementById('cost-input').addEventListener('focus', focusHandler);
+        }
+        function addSwipeLogic(slider, index) {
+            let startX = 0; let currentX = 0; let isSwiping = false;
+            slider.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; isSwiping = true; slider.style.transition = 'none'; }, {passive: true});
+            slider.addEventListener('touchmove', (e) => { if (!isSwiping) return; const diff = e.touches[0].clientX - startX; if (diff < 0 && diff > -100) { currentX = diff; slider.style.transform = `translateX(${diff}px)`; } }, {passive: true});
+            slider.addEventListener('touchend', (e) => { if (!isSwiping) return; isSwiping = false; slider.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)'; if (currentX < -40) { slider.style.transform = `translateX(-70px)`; if (currentSwipedIndex !== -1 && currentSwipedIndex !== index) resetSwipe(currentSwipedIndex); currentSwipedIndex = index; } else { slider.style.transform = `translateX(0)`; if (currentSwipedIndex === index) currentSwipedIndex = -1; } currentX = 0; }, {passive: true});
+        }
+        function resetSwipe(index) { const wrappers = document.querySelectorAll('.note-wrapper'); if (wrappers[index]) { const slider = wrappers[index].querySelector('.note-slider'); if(slider) slider.style.transform = `translateX(0)`; } currentSwipedIndex = -1; }
+        
+        function showStats() { 
+            toggleSettings(); document.getElementById('stats-view').classList.add('active'); const now = new Date(); const curY = now.getFullYear(); const curM = String(now.getMonth() + 1).padStart(2, '0'); let monthTotal = 0; let yearTotal = 0; Object.keys(notes).forEach(key => { const [y, m] = key.split('-'); const list = getNotesArray(key); list.forEach(n => { const val = parseCost(n.cost); if(y == curY) { yearTotal += val; if(m == curM) monthTotal += val; } }); }); 
+            const currencySymbol = t('currency_symbol');
+            document.getElementById('stat-month-val').innerText = isPrivacyMode ? '***' : `${currencySymbol}${monthTotal}`; 
+            document.getElementById('stat-year-val').innerText = isPrivacyMode ? '***' : `${currencySymbol}${yearTotal}`; 
+            renderFilterTags(); calcCustomRange(); 
+        }
+        function closeStats() { document.getElementById('stats-view').classList.remove('active'); }
+        function setQuickRange(type) { const now = new Date(); let start, end; if (type === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 0); } else { start = new Date(now.getFullYear(), 0, 1); end = new Date(now.getFullYear(), 11, 31); } rangeStartVal = formatDateKey(start); rangeEndVal = formatDateKey(end); updateRangeDisplay(); calcCustomRange(); }
+        function renderFilterTags() { const container = document.getElementById('filter-tags-list'); container.innerHTML = ''; const allBtn = document.getElementById('filter-all-btn'); isFilterAll ? allBtn.classList.add('selected') : allBtn.classList.remove('selected'); customTags.forEach(tag => { const chip = document.createElement('div'); chip.className = `filter-tag ${filterSelectedTags.includes(tag) ? 'selected' : ''}`; chip.innerText = tag; chip.onclick = () => { isFilterAll = false; if(filterSelectedTags.includes(tag)) { filterSelectedTags = filterSelectedTags.filter(t => t !== tag); } else { filterSelectedTags.push(tag); } renderFilterTags(); calcCustomRange(); }; container.appendChild(chip); }); }
+        function toggleFilterAll() { isFilterAll = true; filterSelectedTags = []; renderFilterTags(); calcCustomRange(); }
+        function updateRangeDisplay() { 
+            let startText = rangeStartVal || t('stats_start');
+            let endText = rangeEndVal || t('stats_end');
+            
+            if (currentLang === 'en-US') {
+                if (rangeStartVal) {
+                    const [y, m, d] = rangeStartVal.split('-');
+                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    startText = `${monthNames[parseInt(m)-1]} ${d}, ${y}`;
+                }
+                if (rangeEndVal) {
+                    const [y, m, d] = rangeEndVal.split('-');
+                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    endText = `${monthNames[parseInt(m)-1]} ${d}, ${y}`;
+                }
+            }
+
+            document.getElementById('range-start-display').innerText = startText; 
+            document.getElementById('range-end-display').innerText = endText; 
+        }
+        function calcCustomRange() { 
+            const currencySymbol = t('currency_symbol');
+            if(!rangeStartVal || !rangeEndVal) return; 
+            if (!isFilterAll && filterSelectedTags.length === 0) { document.getElementById('range-total-val').innerText = `${currencySymbol}0`; document.getElementById('range-count-val').innerText = t('stat_total_prefix') + "0" + t('stat_total_suffix'); document.getElementById('range-detail-list').innerHTML = ""; return; } const start = new Date(rangeStartVal); const end = new Date(rangeEndVal); let totalCost = 0; let totalCount = 0; const detailStats = {}; Object.keys(notes).forEach(key => { const d = new Date(key); if(d >= start && d <= end) { getNotesArray(key).forEach(n => { if (!isFilterAll && !filterSelectedTags.includes(n.tag)) return; const cost = parseCost(n.cost); totalCost += cost; totalCount++; const tagKey = n.tag || 'Unlabeled'; if(!detailStats[tagKey]) detailStats[tagKey] = { count: 0, cost: 0 }; detailStats[tagKey].count++; detailStats[tagKey].cost += cost; }); } }); 
+            document.getElementById('range-total-val').innerText = isPrivacyMode ? '***' : `${currencySymbol}${totalCost}`; 
+            document.getElementById('range-count-val').innerText = `${t('stat_total_prefix')}${totalCount}${t('stat_total_suffix')}`; 
+            const listEl = document.getElementById('range-detail-list'); listEl.innerHTML = ''; const sorted = Object.entries(detailStats).sort((a, b) => b[1].cost - a[1].cost); sorted.forEach(([tag, data]) => { const item = document.createElement('div'); item.className = 'tag-stat-item'; item.innerHTML = `<div class="stat-tag-info"><span>${tag}</span><span class="stat-tag-count">${data.count}${t('stat_count_suffix')}</span></div><span class="stat-tag-cost">${isPrivacyMode ? '***' : currencySymbol + data.cost}</span>`; listEl.appendChild(item); }); 
+        }
+
+        function showCustomPrompt() { 
+            currentPromptMode = 'tag';
+            showCustomPromptInternal(t('prompt_tag_title'), '', 'text', '例如：☕ 咖啡');
+        }
+
+        function showCustomPromptInternal(title, desc, inputType, placeholder, value = '') {
+            document.getElementById('prompt-title-text').innerText = title;
+            if(desc) {
+                document.getElementById('prompt-desc-text').innerText = desc;
+                document.getElementById('prompt-desc-text').style.display = 'block';
+            } else {
+                document.getElementById('prompt-desc-text').style.display = 'none';
+            }
+            
+            const textInput = document.getElementById('prompt-input-text');
+            const passInput = document.getElementById('prompt-input-password');
+            const pasteBtn = document.getElementById('paste-text-btn');
+            const guideLink = document.getElementById('guide-link');
+            
+            textInput.classList.remove('active-input');
+            passInput.classList.remove('active-input');
+            pasteBtn.style.display = 'none';
+            guideLink.style.display = 'none'; // Hide guide link by default
+            
+            let activeInput;
+            
+            if (inputType === 'password') {
+                passInput.classList.add('active-input');
+                activeInput = passInput;
+            } else {
+                textInput.classList.add('active-input');
+                activeInput = textInput;
+            }
+            
+            activeInput.placeholder = placeholder;
+            activeInput.value = value;
+            document.getElementById('prompt-confirm-btn').innerText = t('btn_confirm');
+            
+            document.getElementById('prompt-confirm-btn').onclick = handlePromptConfirm;
+            
+            document.getElementById('custom-prompt-overlay').classList.add('active'); 
+            setTimeout(() => activeInput.focus(), 100); 
+            toggleClearBtn();
+        }
+
+        function getActivePromptValue() {
+            const textInput = document.getElementById('prompt-input-text');
+            const passInput = document.getElementById('prompt-input-password');
+            if (passInput.classList.contains('active-input')) return passInput.value.trim();
+            return textInput.value.trim();
+        }
+
+        function handlePromptConfirm() {
+            const val = getActivePromptValue();
+            
+            if (currentPromptMode === 'tag') {
+                if (val && !customTags.includes(val)) { customTags.push(val); saveCurrentModeData(); renderTags(); selectTag(val); } 
+            } else if (currentPromptMode === 'add_mode') {
+                if (val) createMode(val);
+            } else if (currentPromptMode.startsWith('rename_mode_')) {
+                const id = currentPromptMode.replace('rename_mode_', '');
+                if (val) executeRenameMode(id, val);
+            } else if (currentPromptMode === 'backup') {
+                executeBackup(val); 
+                return;
+            } else if (currentPromptMode === 'restore_password') {
+                executeRestore(val);
+                return;
+            }
+            
+            closeCustomPrompt();
+        }
+
+        function prepareBackup() {
+            toggleSettings();
+            // Show new choice overlay instead of directly prompting password
+            document.getElementById('backup-choice-overlay').classList.add('active');
+        }
+
+        function selectBackupType(type) {
+            backupType = type;
+            closeBackupChoice();
+            // After choice, prompt for password
+            currentPromptMode = 'backup';
+            showCustomPromptInternal(t('prompt_backup_title'), t('prompt_backup_desc'), 'password', '');
+        }
+
+        function closeBackupChoice() {
+            document.getElementById('backup-choice-overlay').classList.remove('active');
+        }
+
+        function prepareRestore() {
+            toggleSettings();
+            showRestoreOptionPrompt();
+        }
+
+        function showRestoreOptionPrompt() {
+            currentPromptMode = 'restore_option';
+            document.getElementById('prompt-title-text').innerText = t('prompt_restore_title');
+            document.getElementById('prompt-desc-text').innerText = t('prompt_restore_desc');
+            document.getElementById('prompt-desc-text').style.display = 'block';
+            document.getElementById('paste-text-btn').style.display = 'block'; 
+            document.getElementById('guide-link').style.display = 'block'; // Show guide link for restore
+            
+            const textInput = document.getElementById('prompt-input-text');
+            const passInput = document.getElementById('prompt-input-password');
+            textInput.classList.add('active-input');
+            passInput.classList.remove('active-input');
+            
+            textInput.type = 'text';
+            textInput.placeholder = '...';
+            textInput.value = '';
+            
+            document.getElementById('prompt-confirm-btn').innerText = t('btn_file') || "选择文件";
+            document.getElementById('prompt-confirm-btn').onclick = () => document.getElementById('restore-file-input').click();
+            
+            document.getElementById('custom-prompt-overlay').classList.add('active');
+            toggleClearBtn();
+        }
+
+        function toggleClearBtn() {
+            const val = getActivePromptValue();
+            const passInput = document.getElementById('prompt-input-password');
+            const clearBtn = document.getElementById('clear-input-btn');
+            
+            if (val && !passInput.classList.contains('active-input')) {
+                clearBtn.style.display = 'block';
+                if (currentPromptMode === 'restore_option') {
+                    document.getElementById('prompt-confirm-btn').innerText = t('btn_restore') || "恢复";
+                    document.getElementById('prompt-confirm-btn').onclick = () => processRestoreData(val);
+                }
+            } else {
+                clearBtn.style.display = 'none';
+                if (currentPromptMode === 'restore_option') {
+                    document.getElementById('prompt-confirm-btn').innerText = t('btn_file') || "选择文件";
+                    document.getElementById('prompt-confirm-btn').onclick = () => document.getElementById('restore-file-input').click();
+                }
+            }
+        }
+
+        function clearPromptInput() {
+            const textInput = document.getElementById('prompt-input-text');
+            textInput.value = '';
+            textInput.focus();
+            toggleClearBtn();
+        }
+
+        function closeCustomPrompt() { 
+            document.getElementById('custom-prompt-overlay').classList.remove('active'); 
+            document.getElementById('prompt-input-text').value = ''; 
+            document.getElementById('prompt-input-password').value = ''; 
+            document.getElementById('prompt-confirm-btn').innerText = t('btn_confirm');
+            toggleClearBtn();
+            pendingRestoreData = null;
+        }
+
+        async function executeBackup(password) {
+            let backupData;
+            
+            if (backupType === 'current') {
+                // Single mode backup
+                backupData = {
+                    version: 4,
+                    export_date: new Date().toISOString(),
+                    modes: [privacyModes.find(m => m.id === currentModeId)],
+                    data: {
+                        [currentModeId]: {
+                            notes: notes,
+                            tags: customTags
+                        }
+                    }
+                };
+            } else {
+                // Full backup
+                backupData = {
+                    version: 4,
+                    export_date: new Date().toISOString(),
+                    modes: privacyModes,
+                    data: {}
+                };
+                privacyModes.forEach(mode => {
+                    backupData.data[mode.id] = {
+                        notes: JSON.parse(localStorage.getItem(`privacy_notes_${mode.id}`) || '{}'),
+                        tags: JSON.parse(localStorage.getItem(`privacy_custom_tags_${mode.id}`) || '[]')
+                    };
+                });
+            }
+            
+            let finalJson = {};
+            let filename = `PrivacyCalendar_Backup_${formatDateKey(new Date())}.json`;
+            let contentToDownload;
+
+            if (password) {
+                try {
+                    const encryptedResult = await encryptData(JSON.stringify(backupData), password);
+                    finalJson = {
+                        isEncrypted: true,
+                        version: 4,
+                        iv: arrayBufferToBase64(encryptedResult.iv),
+                        salt: arrayBufferToBase64(encryptedResult.salt),
+                        data: arrayBufferToBase64(encryptedResult.data)
+                    };
+                } catch (e) {
+                    showToast(t('toast_encrypted_fail'));
+                    console.error(e);
+                    return;
+                }
+            } else {
+                finalJson = backupData;
+            }
+
+            const jsonString = JSON.stringify(finalJson);
+            
+            // --- 4.8 Optimization: Try Web Share / Copy -> Fallback to File Download ---
+            
+            // 1. Try Web Share API (Mobile)
+            if (navigator.share && navigator.canShare && navigator.canShare({text: jsonString})) {
+                try {
+                     await navigator.share({ title: 'Backup', text: jsonString });
+                     closeCustomPrompt(); 
+                     showToast("Shared"); 
+                     return;
+                } catch (err) {
+                    // Share failed/cancelled, continue to fallback
+                }
+            }
+
+            // 2. Try Clipboard (if text is small enough)
+            // Note: Clipboard has size limits (often ~1MB on mobile). If it fails, fallback.
+            let clipboardSuccess = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(jsonString);
+                    showToast(t('toast_copied'));
+                    clipboardSuccess = true;
+                }
+            } catch (err) {
+                // Clipboard API failed (maybe size limit or permission)
+            }
+
+            // Fallback for Clipboard (textarea hack)
+            if (!clipboardSuccess) {
+                try {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = jsonString;
+                    textArea.style.position = "fixed"; 
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    const success = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    if (success) {
+                        showToast(t('toast_copied'));
+                        clipboardSuccess = true;
+                    }
+                } catch(e) {}
+            }
+
+            // 3. Ultimate Fallback: Download as File
+            // If clipboard failed OR user prefers file (we assume failure implies need for file)
+            // Or we can just ALWAYS download file if clipboard fails.
+            if (!clipboardSuccess) {
+                downloadFile(filename, jsonString);
+                showToast("已生成备份文件 (数据过大)");
+            }
+
+            closeCustomPrompt();
+        }
+
+        // --- 4.8 New Helper: Download File ---
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                processRestoreData(e.target.result);
+                event.target.value = ''; 
+            };
+            reader.readAsText(file);
+        }
+
+        async function handlePasteRestore() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                    document.getElementById('prompt-input-text').value = text;
+                    toggleClearBtn(); 
+                    showToast(t('toast_pasted'));
+                } else {
+                    showToast("Clipboard empty");
+                }
+            } catch (err) {
+                const input = document.getElementById('prompt-input-text');
+                input.focus();
+                input.placeholder = "Long press to paste";
+                showToast("Privacy restriction, long press to paste");
+            }
+        }
+
+        function processRestoreData(jsonString) {
+            try {
+                const json = JSON.parse(jsonString);
+
+                // Check for Zhengqi Backup
+                if (json.records && Array.isArray(json.records)) {
+                    showCustomConfirm("发现正气备份", t('zhengqi_detected'), () => {
+                        importZhengqiData(json);
+                    });
+                    closeCustomPrompt();
+                    return;
+                }
+
+                if (json.isEncrypted && json.data && json.iv) {
+                    pendingRestoreData = json;
+                    currentPromptMode = 'restore_password';
+                    document.getElementById('paste-text-btn').style.display = 'none';
+                    document.getElementById('clear-input-btn').style.display = 'none';
+                    document.getElementById('guide-link').style.display = 'none';
+                    document.getElementById('prompt-title-text').innerText = t('prompt_decrypt');
+                    document.getElementById('prompt-desc-text').innerText = t('prompt_password');
+                    
+                    const textInput = document.getElementById('prompt-input-text');
+                    const passInput = document.getElementById('prompt-input-password');
+                    textInput.classList.remove('active-input');
+                    passInput.classList.add('active-input');
+                    
+                    passInput.value = '';
+                    passInput.placeholder = '';
+                    
+                    document.getElementById('prompt-confirm-btn').innerText = t('btn_confirm');
+                    document.getElementById('prompt-confirm-btn').onclick = handlePromptConfirm;
+                    
+                    document.getElementById('custom-prompt-overlay').classList.add('active');
+                } else {
+                    applyRestore(json);
+                    closeCustomPrompt();
+                }
+            } catch (err) {
+                showToast(t('toast_data_error'));
+            }
+        }
+
+        function importZhengqiData(json) {
+            // Create new mode
+            const newModeId = 'mode_zhengqi_' + Date.now();
+            const newModeName = '正气记录';
+            
+            // Push to modes
+            privacyModes.push({ id: newModeId, name: newModeName });
+            localStorage.setItem('privacy_modes', JSON.stringify(privacyModes));
+            
+            // Prepare data
+            const zqNotes = {};
+            const zqTags = ['自慰', '房事', '看黄', '遗精', '意淫', '欲望', '备注'];
+            
+            // Map keys
+            const keyMap = {
+                'zw': '自慰',
+                'fs': '房事',
+                'kh': '看黄',
+                'yj': '遗精',
+                'yy': '意淫',
+                'yw': '欲望'
+            };
+
+            json.records.forEach(r => {
+                const dateStr = String(r.calendar);
+                const dateKey = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
+                
+                const dayNotes = [];
+                
+                // Counts
+                for (const [k, tagName] of Object.entries(keyMap)) {
+                    if (r[k] > 0) {
+                        dayNotes.push({
+                            tag: tagName,
+                            text: `次数: ${r[k]}`,
+                            cost: 0
+                        });
+                    }
+                }
+                
+                // Remarks (guo)
+                if (r.guo) {
+                    dayNotes.push({
+                        tag: '备注',
+                        text: r.guo,
+                        cost: 0
+                    });
+                }
+                
+                if (dayNotes.length > 0) {
+                    zqNotes[dateKey] = dayNotes;
+                }
+            });
+            
+            // Save data
+            localStorage.setItem(`privacy_notes_${newModeId}`, JSON.stringify(zqNotes));
+            localStorage.setItem(`privacy_custom_tags_${newModeId}`, JSON.stringify(zqTags));
+            
+            showToast(t('zhengqi_imported'));
+            switchMode(newModeId);
+        }
+
+        async function executeRestore(password) {
+            if (!password) { showToast(t('prompt_password')); return; }
+            if (!pendingRestoreData) return;
+
+            try {
+                const iv = base64ToArrayBuffer(pendingRestoreData.iv);
+                const salt = base64ToArrayBuffer(pendingRestoreData.salt);
+                const data = base64ToArrayBuffer(pendingRestoreData.data);
+
+                const decryptedStr = await decryptData(iv, salt, data, password);
+                if (!decryptedStr) throw new Error("Decrypt fail");
+                
+                const dataObj = JSON.parse(decryptedStr);
+                applyRestore(dataObj);
+                closeCustomPrompt();
+            } catch (e) {
+                showToast(t('toast_decrypt_fail'));
+            }
+        }
+
+        function applyRestore(data) {
+            if (data.version === 4 && data.modes && data.data) {
+                showCustomConfirm("恢复全量备份", t('restore_confirm_full'), () => {
+                    localStorage.setItem('privacy_modes', JSON.stringify(data.modes));
+                    Object.keys(data.data).forEach(modeId => {
+                        const modeData = data.data[modeId];
+                        localStorage.setItem(`privacy_notes_${modeId}`, JSON.stringify(modeData.notes));
+                        localStorage.setItem(`privacy_custom_tags_${modeId}`, JSON.stringify(modeData.tags));
+                    });
+                    loadModes(); 
+                    loadCurrentModeData(); 
+                    selectedDateKey = formatDateKey(currentDate); 
+                    renderCalendarGrid(currentDate, 'days-grid-current', 'main');
+                    updateHeader();
+                    renderNotesList();
+                    renderTags();
+                    showToast(t('toast_restored'));
+                });
+            }
+            else if (data.notes && Array.isArray(data.custom_tags || data.tags)) {
+                const targetName = privacyModes.find(m => m.id === currentModeId).name;
+                const msg = t('restore_confirm_legacy').replace('{mode}', targetName);
+                
+                showCustomConfirm("导入旧版数据", msg, () => {
+                    notes = data.notes;
+                    customTags = data.custom_tags || data.tags; 
+                    saveCurrentModeData();
+                    renderCalendarGrid(currentDate, 'days-grid-current', 'main');
+                    updateHeader();
+                    renderNotesList();
+                    renderTags();
+                    showToast(t('toast_legacy'));
+                });
+            } 
+            else {
+                showToast(t('toast_data_error'));
+            }
+        }
+
+        function exportToICS() {
+            toggleSettings(); 
+            
+            let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Privacy Calendar//CN\nCALSCALE:GREGORIAN\nMETHOD:PUBLISH\n";
+            const now = new Date();
+            const dtStamp = formatICSDate(now);
+            let hasEvents = false;
+
+            for (const [dateKey, noteList] of Object.entries(notes)) {
+                if (!Array.isArray(noteList) || noteList.length === 0) continue;
+
+                const [year, month, day] = dateKey.split('-');
+                const dtStart = `${year}${month}${day}`; 
+
+                noteList.forEach((note, index) => {
+                    hasEvents = true;
+                    const tagPart = note.tag ? `[${note.tag}] ` : '';
+                    const costPart = note.cost ? ` ¥${note.cost}` : '';
+                    const summary = `${tagPart}${note.text}${costPart}`;
+                    const desc = `内容: ${note.text}` + (note.cost ? `\\n金额: ¥${note.cost}` : '') + (note.tag ? `\\n标签: ${note.tag}` : '');
+                    
+                    const uid = `uid-${dateKey}-${index}-${Date.now()}@privacycalendar`;
+                    
+                    icsContent += "BEGIN:VEVENT\n";
+                    icsContent += `UID:${uid}\n`;
+                    icsContent += `DTSTAMP:${dtStamp}\n`;
+                    icsContent += `DTSTART;VALUE=DATE:${dtStart}\n`;
+                    icsContent += `SUMMARY:${escapeICS(summary)}\n`;
+                    icsContent += `DESCRIPTION:${escapeICS(desc)}\n`;
+                    icsContent += "STATUS:CONFIRMED\n";
+                    icsContent += "TRANSP:TRANSPARENT\n";
+                    icsContent += "END:VEVENT\n";
+                });
+            }
+
+            icsContent += "END:VCALENDAR";
+
+            if (!hasEvents) {
+                showToast(t('toast_no_data'));
+                return;
+            }
+
+            downloadFile(`Calendar_${currentModeId}_${dtStamp}.ics`, icsContent);
+            showToast(t('toast_exported'));
+        }
+
+        function formatICSDate(date) {
+            return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        }
+
+        function escapeICS(str) {
+            if (!str) return '';
+            return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+        }
+
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        async function getCryptoKey(password, salt) {
+            const enc = new TextEncoder();
+            const keyMaterial = await window.crypto.subtle.importKey("raw", enc.encode(password), {name: "PBKDF2"}, false, ["deriveKey"]);
+            return window.crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+            );
+        }
+
+        async function encryptData(plainText, password) {
+            const enc = new TextEncoder();
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const key = await getCryptoKey(password, salt);
+            const encrypted = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, enc.encode(plainText));
+            return { salt: salt, iv: iv, data: encrypted };
+        }
+
+        async function decryptData(iv, salt, data, password) {
+            const key = await getCryptoKey(password, salt);
+            try {
+                const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
+                return new TextDecoder().decode(decrypted);
+            } catch(e) {
+                return null;
+            }
+        }
+
+        function renderTags() { const bar = document.getElementById('tags-bar'); bar.innerHTML = ''; const addBtn = document.createElement('div'); addBtn.className = 'tag-chip add-btn'; addBtn.innerText = '+ ' + t('mode_new').replace('+ ', ''); addBtn.onclick = showCustomPrompt; bar.appendChild(addBtn); customTags.forEach((tag, index) => { const chip = document.createElement('div'); chip.className = 'tag-chip'; chip.innerText = tag; chip.onclick = () => selectTag(tag); let pressTimer; chip.addEventListener('touchstart', () => { pressTimer = setTimeout(() => showTagContextMenu(null, index, chip), 500); }); chip.addEventListener('touchend', () => clearTimeout(pressTimer)); chip.addEventListener('touchmove', () => clearTimeout(pressTimer)); chip.oncontextmenu = (e) => { e.preventDefault(); showTagContextMenu(e, index, chip); }; bar.appendChild(chip); }); }
+        function showTagContextMenu(e, index, element) { contextMenuTagIndex = index; const menu = document.getElementById('tag-context-menu'); menu.classList.add('active'); if (e) { menu.style.left = e.clientX + 'px'; menu.style.top = e.clientY + 'px'; } else if (element) { const rect = element.getBoundingClientRect(); menu.style.left = rect.left + 'px'; menu.style.top = (rect.top - 100) + 'px'; } }
+        function closeTagContextMenu() { document.getElementById('tag-context-menu').classList.remove('active'); }
+        function moveTag(direction) { if (contextMenuTagIndex === -1) return; const newIndex = contextMenuTagIndex + direction; if (newIndex >= 0 && newIndex < customTags.length) { const temp = customTags[contextMenuTagIndex]; customTags[contextMenuTagIndex] = customTags[newIndex]; customTags[newIndex] = temp; saveCurrentModeData(); renderTags(); } closeTagContextMenu(); }
+        function deleteTagFromMenu() { if (contextMenuTagIndex === -1) return; deleteTag(contextMenuTagIndex); closeTagContextMenu(); }
+        function deleteTag(index) { const deletedTag = customTags[index]; customTags.splice(index, 1); saveCurrentModeData(); if (selectedTag === deletedTag) selectedTag = ""; renderTags(); }
+        function saveTags() { saveCurrentModeData(); }
+        function toggleTagsBar() { document.getElementById('tags-bar').classList.toggle('show'); document.getElementById('tag-toggle-btn').classList.toggle('active'); }
+        function selectTag(tag) { selectedTag = (selectedTag === tag) ? "" : tag; document.querySelectorAll('#tags-bar .tag-chip:not(.add-btn)').forEach(c => { if (c.innerText === selectedTag) c.classList.add('active'); else c.classList.remove('active'); }); }
+        function calculateMonthTotal(dateObj) { const y = dateObj.getFullYear(); const m = String(dateObj.getMonth() + 1).padStart(2, '0'); const prefix = `${y}-${m}`; let total = 0; Object.keys(notes).forEach(key => { if (key.startsWith(prefix)) { getNotesArray(key).forEach(n => { if (n.cost) total += parseFloat(n.cost); }); } }); return total; }
+        function updateHeader() { const year = currentDate.getFullYear(); const month = currentDate.getMonth(); const titleBtn = document.getElementById('calendar-title-btn'); 
+            if (currentLang === 'zh-CN') {
+                titleBtn.querySelector('.year').innerText = year; titleBtn.querySelector('.month').innerText = (month + 1) + '月'; 
+            } else {
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                titleBtn.querySelector('.year').innerText = "";
+                titleBtn.querySelector('.month').innerText = monthNames[month] + " " + year;
+            }
+            const total = calculateMonthTotal(currentDate); const totalEl = document.getElementById('month-total'); const currencySymbol = t('currency_symbol'); if (total > 0) { totalEl.innerText = `${currencySymbol}${total}`; totalEl.classList.remove('hidden'); if(isPrivacyMode) totalEl.classList.add('hidden'); } else { totalEl.classList.add('hidden'); } }
+        function togglePrivacy() { isPrivacyMode = !isPrivacyMode; localStorage.setItem('privacy_mode', isPrivacyMode); updateEyeIcon(); updateHeader(); renderCalendarGrid(currentDate, 'days-grid-current', 'main'); renderNotesList(); if(document.getElementById('stats-view').classList.contains('active')) showStats(); }
+        function updateEyeIcon() { const icon = document.getElementById('eye-icon'); icon.innerHTML = isPrivacyMode ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>' : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>'; }
+        function initPickerData() { const yearCol = document.getElementById('col-year'); const monthCol = document.getElementById('col-month'); const realY = realDate.getFullYear(); const realM = realDate.getMonth() + 1; for(let y = 1980; y <= 2060; y++) { const item = document.createElement('div'); item.className = 'picker-item' + (y === realY ? ' is-current' : ''); item.innerText = y; item.dataset.val = y; item.onclick = () => yearCol.scrollTo({ top: item.offsetTop - 150, behavior: 'smooth' }); yearCol.appendChild(item); } for(let m = 1; m <= 12; m++) { const item = document.createElement('div'); item.className = 'picker-item' + (m === realM ? ' is-current' : ''); item.innerText = m + '月'; item.dataset.val = m; item.onclick = () => monthCol.scrollTo({ top: item.offsetTop - 150, behavior: 'smooth' }); monthCol.appendChild(item); } yearCol.onscroll = () => updatePickerActive(yearCol, 'pickerYear'); monthCol.onscroll = () => updatePickerActive(monthCol, 'pickerMonth'); }
+        function updatePickerActive(col, varName) { const center = col.scrollTop + 175; const items = col.getElementsByClassName('picker-item'); let activeItem = null, minDist = Infinity; for(let item of items) { const dist = Math.abs((item.offsetTop + 25) - center); if(dist < minDist) { minDist = dist; activeItem = item; } item.classList.remove('active'); } if(activeItem) { activeItem.classList.add('active'); if(varName === 'pickerYear') pickerYear = parseInt(activeItem.dataset.val); if(varName === 'pickerMonth') pickerMonth = parseInt(activeItem.dataset.val); } }
+        function openDatePicker(source) { pickerSource = source; let dateBase = source === 'main' ? currentDate : statsDate; pickerYear = dateBase.getFullYear(); pickerMonth = dateBase.getMonth() + 1; document.getElementById('picker-overlay').classList.add('active'); document.getElementById('picker-modal').classList.add('active'); setTimeout(() => { const yearCol = document.getElementById('col-year'); const monthCol = document.getElementById('col-month'); Array.from(yearCol.children).forEach(el => {if(parseInt(el.dataset.val) === pickerYear) yearCol.scrollTo({top: el.offsetTop - 150, behavior: 'auto'})}); Array.from(monthCol.children).forEach(el => {if(parseInt(el.dataset.val) === pickerMonth) monthCol.scrollTo({top: el.offsetTop - 150, behavior: 'auto'})}); }, 50); }
+        function closeDatePicker() { document.getElementById('picker-overlay').classList.remove('active'); document.getElementById('picker-modal').classList.remove('active'); }
+        function confirmDatePick() { 
+            if (pickerSource === 'main') { currentDate.setFullYear(pickerYear); currentDate.setMonth(pickerMonth - 1); renderCalendarGrid(currentDate, 'days-grid-current', 'main'); updateHeader(); updateBackToTodayButton('main'); } 
+            else { statsDate.setFullYear(pickerYear); statsDate.setMonth(pickerMonth - 1); renderCalendarGrid(statsDate, 'stats-days-grid-current', 'stats'); updateStatsHeader(); updateBackToTodayButton('stats'); }
+            closeDatePicker(); 
+        }
+        function toggleSettings() { const menu = document.getElementById('settings-menu'); menu.style.display = menu.style.display === 'block' ? 'none' : 'block'; }
+        function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
+
+        init();
+    </script>
+</body>
+</html>
